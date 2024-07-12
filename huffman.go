@@ -2,6 +2,9 @@ package ncrlite
 
 import (
 	"container/heap"
+	"errors"
+	"fmt"
+	"math/bits"
 	"slices"
 )
 
@@ -28,6 +31,7 @@ func (n *htNode) Walk(path int) (*htNode, int) {
 		if next == nil {
 			return cur, i
 		}
+		path >>= 1
 		i++
 		cur = next
 	}
@@ -41,10 +45,22 @@ type htCodeEntry struct {
 	length int
 }
 
+func (h htCode) Print() {
+	for i, entry := range h {
+		fmt.Printf("%2d ", i)
+		code := entry.code
+		for j := 0; j < entry.length; j++ {
+			fmt.Printf("%d", code&1)
+			code >>= 1
+		}
+		fmt.Printf("\n")
+	}
+}
+
 // Pack codebook
 func (h htCode) Pack(bw *bitWriter) {
-	bw.WriteEliasDelta(uint64(len(h) - 1))
-	bw.WriteEliasDelta(uint64(h[0].length))
+	bw.WriteUvarint(uint64(len(h) - 1))
+	bw.WriteUvarint(uint64(h[0].length))
 
 	prev := h[0].length
 
@@ -63,6 +79,45 @@ func (h htCode) Pack(bw *bitWriter) {
 		bw.WriteBits(1, 1)
 		prev = l
 	}
+}
+
+func unpackCodeLengths(br *bitReader) ([]int, error) {
+	n := br.ReadUvarint() + 1
+	h := make([]int, n)
+	h[0] = int(br.ReadUvarint())
+	change := 0
+	i := 1
+	waitingFor := 0
+
+	for {
+		next := br.ReadBits(1)
+		if next == 1 {
+			h[i] = h[i-1] + change
+			i++
+
+			if i == int(n) {
+				break
+			}
+
+			waitingFor = 0
+			change = 0
+			continue
+		}
+
+		waitingFor++
+		up := br.ReadBits(1)
+		if up == 1 {
+			change++
+		} else {
+			change--
+		}
+
+		if waitingFor > int(n) {
+			return nil, errors.New("invalid codelength in Huffman table")
+		}
+	}
+
+	return h, br.Err()
 }
 
 // Priority queue to find nodes with lowest count
@@ -144,7 +199,46 @@ func buildHuffmanCode(freq []int) htCode {
 		codeLengths[nd.n.value] = nd.depth
 	}
 
-	return canonicalHuffmanCode(codeLengths)
+	codebook := canonicalHuffmanCode(codeLengths)
+	return codebook
+}
+
+func unpackHuffmanTree(br *bitReader) (*htNode, error) {
+	codeLengths, err := unpackCodeLengths(br)
+	if err != nil {
+		return nil, err
+	}
+
+	codebook := canonicalHuffmanCode(codeLengths)
+
+	root := &htNode{}
+
+	for bn, entry := range codebook {
+		code := entry.code
+		n, d := root.Walk(code)
+		code >>= d
+
+		// Create last few nodes
+		for j := d; j < entry.length; j++ {
+			n.left = &htNode{}
+			n.right = &htNode{}
+
+			if code&1 == 0 {
+				n = n.left
+			} else {
+				n = n.right
+			}
+			code >>= 1
+		}
+
+		// Set leaf
+		if n.value != 0 || n.left != nil || n.right != nil {
+			panic("shoulnd't happen")
+		}
+		n.value = bn
+	}
+
+	return root, nil
 }
 
 func canonicalHuffmanCode(codeLengths []int) htCode {
@@ -178,33 +272,11 @@ func canonicalHuffmanCode(codeLengths []int) htCode {
 
 		vls[i].code = code
 		ret[vls[i].value] = htCodeEntry{
-			code:   code,
+			code:   int(bits.Reverse64(uint64(code)) >> (64 - l)),
 			length: l,
 		}
 		prevLength = l
 		code++
-
-		// // Walk down partial tree now
-		// n, d := root.Walk(code)
-		// code >>= d
-
-		// // Create last few nodes
-		// for j := d; j < vls[i].length; j++ {
-		// 	n.left = &htNode{}
-		// 	n.right = &htNode{}
-
-		// 	if code&1 == 0 {
-		// 		n = n.left
-		// 	} else {
-		// 		n = n.right
-		// 	}
-		// }
-
-		// // Set leaf
-		// if n.value != 0 || n.left != nil || n.right != nil {
-		// 	panic("shoulnd't happen")
-		// }
-		// n.value = vls[i].value
 	}
 
 	return ret

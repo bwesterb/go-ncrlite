@@ -2,17 +2,36 @@ package ncrlite
 
 import (
 	"bytes"
-	"testing"
-
 	"math/rand"
+	"slices"
+	"testing"
 )
 
-func BenchmarkWebPKI(b *testing.B) {
+func BenchmarkDecompress(b *testing.B) {
 	b.StopTimer()
 
 	N := 735000000
-	// k :=  13000000
-	k := 16777217
+	k := 13000000
+
+	buf := new(bytes.Buffer)
+	ret := sample(N, k)
+	Compress(buf, ret)
+	xs := buf.Bytes()
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		buf.Write(xs)
+		Decompress(buf)
+	}
+}
+
+func BenchmarkCompress(b *testing.B) {
+	b.StopTimer()
+
+	N := 735000000
+	k := 13000000
 
 	buf := new(bytes.Buffer)
 
@@ -45,13 +64,20 @@ func sample(N, k int) []uint64 {
 
 func TestWebPKI(t *testing.T) {
 	N := 735000000
-	// k :=  13000000
-	k := 16777217
+	k := 13000000
+	// k := 16777217
+	// k := 3
 
 	buf := new(bytes.Buffer)
 
 	ret := sample(N, k)
 
 	Compress(buf, ret)
-	// t.Fatalf("%d", len(buf.Bytes()))
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
 }

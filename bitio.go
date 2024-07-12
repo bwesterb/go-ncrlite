@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math/bits"
 )
 
 type bitReader struct {
@@ -127,26 +126,33 @@ func (r *bitReader) ReadBits(l int) uint64 {
 	return ret
 }
 
-func (w *bitWriter) WriteEliasDelta(x uint64) {
-	x++
-	N := uint64(bits.Len64(x) - 1)
-	L := uint64(bits.Len64(N+1) - 1)
-	bs := ((N+1)^(1<<L))<<(L+1) | (x^(1<<N))<<(2*L+1) | (1 << L)
-	bl := int(2*L + 1 + N)
-	w.WriteBits(bs, bl)
+func (w *bitWriter) WriteUvarint(x uint64) {
+	for x >= 0x80 {
+		w.WriteBits(uint64(byte(x)|0x80), 8)
+		x >>= 7
+	}
+
+	w.WriteBits(uint64(byte(x)), 8)
 }
 
-func (r *bitReader) ReadEliasDelta() uint64 {
-	L := 0
-	for r.ReadBits(1) == 0 {
-		L++
-		if L > 5 {
-			return 0xffffffffffffffff
+func (r *bitReader) ReadUvarint() uint64 {
+	var ret uint64
+
+	for s := 0; s <= 63; s += 7 {
+		x := r.ReadBits(7)
+		if s == 63 && x > 1 {
+			if r.err != nil {
+				r.err = errors.New("Uvarint overflow")
+			}
+			return 0
+		}
+		ret |= x << s
+		more := r.ReadBits(1)
+
+		if more == 0 {
+			break
 		}
 	}
-	N := (r.ReadBits(int(L)) | (1 << L)) - 1
-	if N > 63 {
-		return 0xffffffffffffffff
-	}
-	return (r.ReadBits(int(N)) | (1 << N)) - 1
+
+	return ret
 }
