@@ -10,13 +10,13 @@ import (
 
 // Node in a Huffman tree
 type htNode struct {
-	value    int // If a leaf, the value: bitlength of the delta (minus one)
-	count    int // Cumulative count
+	value    byte // If a leaf, the value: bitlength of the delta (minus one)
+	count    int  // Cumulative count
 	children [2]*htNode
 }
 
 // Walk down tree using path. Return node and number of steps taken.
-func (n *htNode) Walk(path int) (*htNode, int) {
+func (n *htNode) Walk(path byte) (*htNode, int) {
 	i := 0
 	cur := n
 	var next *htNode
@@ -36,15 +36,15 @@ func (n *htNode) Walk(path int) (*htNode, int) {
 type htCode []htCodeEntry
 
 type htCodeEntry struct {
-	code   int
-	length int
+	code   byte
+	length byte
 }
 
 func (h htCode) Print() {
 	for i, entry := range h {
 		fmt.Printf("%2d ", i)
 		code := entry.code
-		for j := 0; j < entry.length; j++ {
+		for j := 0; j < int(entry.length); j++ {
 			fmt.Printf("%d", code&1)
 			code >>= 1
 		}
@@ -67,7 +67,7 @@ func (h htCode) Pack(bw *bitWriter) {
 			sign = 0
 			absDiff = -absDiff
 		}
-		for j := 0; j < absDiff; j++ {
+		for j := 0; j < int(absDiff); j++ {
 			bw.WriteBits(0, 1)
 			bw.WriteBits(uint64(sign), 1)
 		}
@@ -76,18 +76,18 @@ func (h htCode) Pack(bw *bitWriter) {
 	}
 }
 
-func unpackCodeLengths(br *bitReader) ([]int, error) {
+func unpackCodeLengths(br *bitReader) ([]byte, error) {
 	n := br.ReadUvarint() + 1
-	h := make([]int, n)
-	h[0] = int(br.ReadUvarint())
-	change := 0
+	h := make([]byte, n)
+	h[0] = byte(br.ReadUvarint())
+	change := int8(0)
 	i := 1
 	waitingFor := 0
 
 	for {
 		next := br.ReadBit()
 		if next == 1 {
-			h[i] = h[i-1] + change
+			h[i] = byte(int8(h[i-1]) + change)
 			i++
 
 			if i == int(n) {
@@ -145,7 +145,7 @@ func buildHuffmanCode(freq []int) htCode {
 
 	for i := 0; i < len(freq); i++ {
 		h[i] = &htNode{
-			value: i,
+			value: byte(i),
 			count: freq[i],
 		}
 	}
@@ -167,11 +167,11 @@ func buildHuffmanCode(freq []int) htCode {
 	// There are many equivalent trees; what matters is the length
 	// of the code for each value. Find those and find the canonical
 	// code for that.
-	codeLengths := make([]int, len(freq))
+	codeLengths := make([]byte, len(freq))
 
 	type nodeDepth struct {
 		n     *htNode
-		depth int
+		depth byte
 	}
 
 	stack := []nodeDepth{{n: h[0], depth: 0}}
@@ -213,7 +213,7 @@ func unpackHuffmanTree(br *bitReader) (*htNode, error) {
 		code >>= d
 
 		// Create last few nodes
-		for j := d; j < entry.length; j++ {
+		for j := d; j < int(entry.length); j++ {
 			n.children = [2]*htNode{&htNode{}, &htNode{}}
 
 			n = n.children[code&1]
@@ -224,34 +224,34 @@ func unpackHuffmanTree(br *bitReader) (*htNode, error) {
 		if n.value != 0 || n.children[0] != nil || n.children[1] != nil {
 			panic("shoulnd't happen")
 		}
-		n.value = bn
+		n.value = byte(bn)
 	}
 
 	return root, nil
 }
 
-func canonicalHuffmanCode(codeLengths []int) htCode {
+func canonicalHuffmanCode(codeLengths []byte) htCode {
 	type valueLength struct {
-		value  int
-		length int
-		code   int
+		value  byte
+		length byte
+		code   byte
 	}
 
 	vls := make([]valueLength, len(codeLengths))
 	for i := 0; i < len(codeLengths); i++ {
-		vls[i].value = i
+		vls[i].value = byte(i)
 		vls[i].length = codeLengths[i]
 	}
 
 	slices.SortFunc(vls, func(a, b valueLength) int {
 		if a.length != b.length {
-			return a.length - b.length
+			return int(a.length) - int(b.length)
 		}
-		return a.value - b.value
+		return int(a.value) - int(b.value)
 	})
 
-	prevLength := 0
-	code := 0
+	prevLength := byte(0)
+	code := byte(0)
 	ret := make(htCode, len(codeLengths))
 	for i := 0; i < len(vls); i++ {
 		l := vls[i].length
@@ -261,7 +261,7 @@ func canonicalHuffmanCode(codeLengths []int) htCode {
 
 		vls[i].code = code
 		ret[vls[i].value] = htCodeEntry{
-			code:   int(bits.Reverse64(uint64(code)) >> (64 - l)),
+			code:   bits.Reverse8(code) >> (8 - l),
 			length: l,
 		}
 		prevLength = l

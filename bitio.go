@@ -9,7 +9,7 @@ import (
 
 type bitReader struct {
 	r    *bufio.Reader
-	size int
+	size byte
 	buf  uint64
 	err  error
 
@@ -93,7 +93,7 @@ func (w *bitWriter) WriteBits(bs uint64, l int) {
 }
 
 // Reads bits assuming l <= r.size.
-func (r *bitReader) readBits(l int) uint64 {
+func (r *bitReader) readBits(l byte) uint64 {
 	ret := r.buf & (uint64(1<<l) - 1)
 	r.size -= l
 	r.buf >>= l
@@ -114,7 +114,7 @@ func (r *bitReader) fill() bool {
 	}
 
 	r.buf = binary.LittleEndian.Uint64(r.scratch[:])
-	r.size = 8 * n
+	r.size = byte(8 * n)
 	return true
 }
 
@@ -125,14 +125,14 @@ func (r *bitReader) ReadBit() byte {
 		}
 	}
 
-	ret := byte(r.buf & 1)
+	ret := byte(r.buf) & 1
 	r.size--
 	r.buf >>= 1
 
 	return ret
 }
 
-func (r *bitReader) ReadBits(l int) uint64 {
+func (r *bitReader) ReadBits(l byte) uint64 {
 	read := min(l, r.size)
 
 	ret := r.readBits(read)

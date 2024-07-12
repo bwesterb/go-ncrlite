@@ -66,7 +66,7 @@ func CompressSorted(w io.Writer, set []uint64) error {
 	for _, d := range ds {
 		bn := bits.Len64(d) - 1
 
-		bw.WriteBits(uint64(code[bn].code), code[bn].length)
+		bw.WriteBits(uint64(code[bn].code), int(code[bn].length))
 
 		bw.WriteBits(d^(1<<bn), bn)
 	}
