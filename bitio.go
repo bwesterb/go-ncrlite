@@ -12,6 +12,8 @@ type bitReader struct {
 	size int
 	buf  uint64
 	err  error
+
+	scratch [8]byte // to prevent allocations
 }
 
 type bitWriter struct {
@@ -106,8 +108,7 @@ func (r *bitReader) ReadBits(l int) uint64 {
 		return ret
 	}
 
-	var buf [8]byte
-	n, err := r.r.Read(buf[:])
+	n, err := r.r.Read(r.scratch[:])
 	if n == 0 {
 		r.err = err
 		return 0
@@ -116,10 +117,10 @@ func (r *bitReader) ReadBits(l int) uint64 {
 	// An io.Reader is allowed to use whole of buf as scratch space, so we
 	// need to explicitly set to zero.
 	for i := n; i < 8; i++ {
-		buf[i] = 0
+		r.scratch[i] = 0
 	}
 
-	r.buf = binary.LittleEndian.Uint64(buf[:])
+	r.buf = binary.LittleEndian.Uint64(r.scratch[:])
 	r.size = 8 * n
 
 	ret |= r.readBits(l-read) << read
