@@ -116,7 +116,7 @@ func (d *Decompressor) Read(set []uint64) error {
 		node := d.root
 		for node.children[0] != nil {
 			j++
-			node = node.children[d.br.ReadBits(1)]
+			node = node.children[d.br.ReadBit()]
 		}
 
 		delta := d.br.ReadBits(node.value) | (1 << node.value)

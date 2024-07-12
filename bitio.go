@@ -100,18 +100,11 @@ func (r *bitReader) readBits(l int) uint64 {
 	return ret
 }
 
-func (r *bitReader) ReadBits(l int) uint64 {
-	read := min(l, r.size)
-
-	ret := r.readBits(read)
-	if read == l {
-		return ret
-	}
-
+func (r *bitReader) fill() bool {
 	n, err := r.r.Read(r.scratch[:])
 	if n == 0 {
 		r.err = err
-		return 0
+		return false
 	}
 
 	// An io.Reader is allowed to use whole of buf as scratch space, so we
@@ -122,6 +115,34 @@ func (r *bitReader) ReadBits(l int) uint64 {
 
 	r.buf = binary.LittleEndian.Uint64(r.scratch[:])
 	r.size = 8 * n
+	return true
+}
+
+func (r *bitReader) ReadBit() byte {
+	if r.size == 0 {
+		if !r.fill() {
+			return 0
+		}
+	}
+
+	ret := byte(r.buf & 1)
+	r.size--
+	r.buf >>= 1
+
+	return ret
+}
+
+func (r *bitReader) ReadBits(l int) uint64 {
+	read := min(l, r.size)
+
+	ret := r.readBits(read)
+	if read == l {
+		return ret
+	}
+
+	if !r.fill() {
+		return 0
+	}
 
 	ret |= r.readBits(l-read) << read
 	return ret

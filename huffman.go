@@ -85,7 +85,7 @@ func unpackCodeLengths(br *bitReader) ([]int, error) {
 	waitingFor := 0
 
 	for {
-		next := br.ReadBits(1)
+		next := br.ReadBit()
 		if next == 1 {
 			h[i] = h[i-1] + change
 			i++
@@ -100,7 +100,7 @@ func unpackCodeLengths(br *bitReader) ([]int, error) {
 		}
 
 		waitingFor++
-		up := br.ReadBits(1)
+		up := br.ReadBit()
 		if up == 1 {
 			change++
 		} else {
