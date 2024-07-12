@@ -114,13 +114,9 @@ func (d *Decompressor) Read(set []uint64) error {
 		// Read codeword for length
 		j := 0
 		node := d.root
-		for node.left != nil {
+		for node.children[0] != nil {
 			j++
-			if d.br.ReadBits(1) == 0 {
-				node = node.left
-			} else {
-				node = node.right
-			}
+			node = node.children[d.br.ReadBits(1)]
 		}
 
 		delta := d.br.ReadBits(node.value) | (1 << node.value)

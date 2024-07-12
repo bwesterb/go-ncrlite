@@ -10,10 +10,9 @@ import (
 
 // Node in a Huffman tree
 type htNode struct {
-	value int // If a leaf, the value: bitlength of the delta (minus one)
-	count int // Cumulative count
-	left  *htNode
-	right *htNode
+	value    int // If a leaf, the value: bitlength of the delta (minus one)
+	count    int // Cumulative count
+	children [2]*htNode
 }
 
 // Walk down tree using path. Return node and number of steps taken.
@@ -23,11 +22,7 @@ func (n *htNode) Walk(path int) (*htNode, int) {
 	var next *htNode
 
 	for {
-		if path&1 == 0 {
-			next = cur.left
-		} else {
-			next = cur.right
-		}
+		next = cur.children[path&1]
 		if next == nil {
 			return cur, i
 		}
@@ -164,9 +159,8 @@ func buildHuffmanCode(freq []int) htCode {
 		n2 := heap.Pop(&h).(*htNode)
 
 		heap.Push(&h, &htNode{
-			count: n1.count + n2.count,
-			left:  n1,
-			right: n2,
+			count:    n1.count + n2.count,
+			children: [2]*htNode{n1, n2},
 		})
 	}
 
@@ -187,11 +181,11 @@ func buildHuffmanCode(freq []int) htCode {
 		nd := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
-		if nd.n.left != nil {
+		if nd.n.children[0] != nil {
 			stack = append(
 				stack,
-				nodeDepth{nd.n.left, nd.depth + 1},
-				nodeDepth{nd.n.right, nd.depth + 1},
+				nodeDepth{nd.n.children[0], nd.depth + 1},
+				nodeDepth{nd.n.children[1], nd.depth + 1},
 			)
 			continue
 		}
@@ -220,19 +214,14 @@ func unpackHuffmanTree(br *bitReader) (*htNode, error) {
 
 		// Create last few nodes
 		for j := d; j < entry.length; j++ {
-			n.left = &htNode{}
-			n.right = &htNode{}
+			n.children = [2]*htNode{&htNode{}, &htNode{}}
 
-			if code&1 == 0 {
-				n = n.left
-			} else {
-				n = n.right
-			}
+			n = n.children[code&1]
 			code >>= 1
 		}
 
 		// Set leaf
-		if n.value != 0 || n.left != nil || n.right != nil {
+		if n.value != 0 || n.children[0] != nil || n.children[1] != nil {
 			panic("shoulnd't happen")
 		}
 		n.value = bn
