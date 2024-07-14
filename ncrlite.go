@@ -94,9 +94,9 @@ type Decompressor struct {
 	br        *bitReader
 	remaining uint64
 
-	root    *htNode // Huffman tree
-	prev    uint64  // last value emitted
-	started bool    // true if a value has been emitted
+	tree    htLut  // Huffman tree
+	prev    uint64 // last value emitted
+	started bool   // true if a value has been emitted
 }
 
 // Returns the number of uint64 remaining to be decompressed.
@@ -112,14 +112,18 @@ func (d *Decompressor) Read(set []uint64) error {
 		}
 
 		// Read codeword for length
-		j := 0
-		node := d.root
-		for node.children[0] != nil {
-			j++
-			node = node.children[d.br.ReadBit()]
+		node := byte(0)
+		for {
+			bit := d.br.ReadBit()
+			node = d.tree[node][bit]
+			if node&128 == 128 {
+				break
+			}
 		}
 
-		delta := d.br.ReadBits(node.value) | (1 << node.value)
+		bn := node ^ 128
+
+		delta := d.br.ReadBits(bn) | (1 << bn)
 
 		val := d.prev + delta
 
@@ -147,7 +151,7 @@ func NewDecompressor(r io.Reader) (*Decompressor, error) {
 
 	// Read Huffman code
 	var err error
-	d.root, err = unpackHuffmanTree(br)
+	d.tree, err = unpackHuffmanTree(br)
 	if err != nil {
 		return nil, err
 	}

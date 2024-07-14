@@ -8,28 +8,17 @@ import (
 	"slices"
 )
 
-// Node in a Huffman tree
+// Representation of Huffman tree used during decompression
+//
+// Root is at index 0. htLut[i][0] contains the index of the left child of
+// the ith node if it's an internal node, and 128 | value if it's a leaf.
+type htLut [][2]byte
+
+// Node in a Huffman tree when constructed from frequences
 type htNode struct {
 	value    byte // If a leaf, the value: bitlength of the delta (minus one)
 	count    int  // Cumulative count
 	children [2]*htNode
-}
-
-// Walk down tree using path. Return node and number of steps taken.
-func (n *htNode) Walk(path byte) (*htNode, int) {
-	i := 0
-	cur := n
-	var next *htNode
-
-	for {
-		next = cur.children[path&1]
-		if next == nil {
-			return cur, i
-		}
-		path >>= 1
-		i++
-		cur = next
-	}
 }
 
 // Codebook for Huffman code
@@ -197,7 +186,7 @@ func buildHuffmanCode(freq []int) htCode {
 	return codebook
 }
 
-func unpackHuffmanTree(br *bitReader) (*htNode, error) {
+func unpackHuffmanTree(br *bitReader) (htLut, error) {
 	codeLengths, err := unpackCodeLengths(br)
 	if err != nil {
 		return nil, err
@@ -205,29 +194,47 @@ func unpackHuffmanTree(br *bitReader) (*htNode, error) {
 
 	codebook := canonicalHuffmanCode(codeLengths)
 
-	root := &htNode{}
+	tree := [][2]byte{{0, 0}}
 
 	for bn, entry := range codebook {
 		code := entry.code
-		n, d := root.Walk(code)
-		code >>= d
 
-		// Create last few nodes
-		for j := d; j < int(entry.length); j++ {
-			n.children = [2]*htNode{&htNode{}, &htNode{}}
+		// Walk down the existing tree
+		node := byte(0)
+		d := 0
+		for {
+			next := tree[node][code&1]
 
-			n = n.children[code&1]
+			if next == 0 {
+				break
+			}
+
+			if next&128 != 0 {
+				panic("shouldn't happen")
+			}
+
+			d++
+			code >>= 1
+			node = next
+		}
+
+		// Now create the new nodes
+		for j := d; j < int(entry.length)-1; j++ {
+			newNode := byte(len(tree))
+			tree = append(tree, [2]byte{0, 0})
+			tree[node][code&1] = newNode
+			node = newNode
 			code >>= 1
 		}
 
-		// Set leaf
-		if n.value != 0 || n.children[0] != nil || n.children[1] != nil {
-			panic("shoulnd't happen")
+		if tree[node][code&1] != 0 {
+			panic("shouldn't happen")
 		}
-		n.value = byte(bn)
+
+		tree[node][code&1] = 128 | byte(bn)
 	}
 
-	return root, nil
+	return tree, nil
 }
 
 func canonicalHuffmanCode(codeLengths []byte) htCode {
