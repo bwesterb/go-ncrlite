@@ -66,8 +66,8 @@ func (h htCode) Print() {
 
 // Pack codebook
 func (h htCode) Pack(bw *bitWriter) {
-	bw.WriteUvarint(uint64(len(h) - 1))
-	bw.WriteUvarint(uint64(h[0].length))
+	bw.WriteBits(uint64(len(h)-1), 6)
+	bw.WriteBits(uint64(h[0].length), 6)
 
 	prev := h[0].length
 
@@ -89,9 +89,9 @@ func (h htCode) Pack(bw *bitWriter) {
 }
 
 func unpackCodeLengths(br *bitReader) ([]byte, error) {
-	n := br.ReadUvarint() + 1
+	n := br.ReadBits(6) + 1
 	h := make([]byte, n)
-	h[0] = byte(br.ReadUvarint())
+	h[0] = byte(br.ReadBits(6))
 	change := int8(0)
 	i := 1
 	waitingFor := 0
