@@ -28,13 +28,20 @@ func CompressSorted(w io.Writer, set []uint64) error {
 	}
 
 	if len(set) == 0 {
-		return nil
+		return bw.Close()
+	}
+
+	if len(set) == 1 {
+		bw.WriteUvarint(set[0])
+		return bw.Close()
 	}
 
 	// Compute deltas
 	ds := make([]uint64, len(set))
 
-	ds[0] = set[0] + 1 // none of the other deltas can be zero
+	// None of the other deltas can be zero, so add one. As set contains
+	// at least two element, set[0] can't be 2⁶⁴-1, so there is no overflow.
+	ds[0] = set[0] + 1
 	for i := 0; i < len(ds)-1; i++ {
 		if set[i+1] <= set[i] {
 			panic("set has duplicates or is not sorted")
@@ -71,6 +78,10 @@ func CompressSorted(w io.Writer, set []uint64) error {
 		bw.WriteBits(d^(1<<bn), bn)
 	}
 
+	// End with single byte so that when reading we can
+	// peek efficiently without hitting EOF.
+	bw.WriteBits(0xaa, 8)
+
 	return bw.Close()
 }
 
@@ -92,6 +103,7 @@ func Decompress(r io.Reader) ([]uint64, error) {
 
 type Decompressor struct {
 	br        *bitReader
+	size      uint64
 	remaining uint64
 
 	tree    htLut  // Huffman tree
@@ -104,26 +116,61 @@ func (d *Decompressor) Remaining() uint64 {
 	return d.remaining
 }
 
+var ErrNoMore = errors.New("Reading beyond end of set")
+
 // Fill set with decompressed uint64s.
 func (d *Decompressor) Read(set []uint64) error {
+	if len(set) == 0 {
+		return nil
+	}
+
+	if d.size == 0 {
+		return ErrNoMore
+	}
+
+	if d.size == 1 {
+		if d.remaining == 0 {
+			return ErrNoMore
+		}
+
+		set[0] = d.br.ReadUvarint()
+		if err := d.br.Err(); err != nil {
+			return err
+		}
+
+		d.remaining = 0
+
+		if len(set) > 1 {
+			return ErrNoMore
+		}
+
+		return nil
+	}
+
 	for i := 0; i < len(set); i++ {
 		if d.remaining == 0 {
-			return errors.New("Reading beyond end of set")
+			return ErrNoMore
 		}
 
 		// Read codeword for length
-		node := byte(0)
+		node := 0
+		var entry htLutEntry
+
 		for {
-			bit := d.br.ReadBit()
-			node = d.tree[node][bit]
-			if node&128 == 128 {
+			code := d.br.PeekByte()
+			entry = d.tree[node+int(code)]
+
+			if entry.skip != 0 {
 				break
 			}
+
+			d.br.SkipBits(8)
+			node = entry.next
 		}
 
-		bn := node ^ 128
+		d.br.SkipBits(entry.skip)
 
-		delta := d.br.ReadBits(bn) | (1 << bn)
+		delta := d.br.ReadBits(entry.value) | (1 << entry.value)
 
 		val := d.prev + delta
 
@@ -135,6 +182,11 @@ func (d *Decompressor) Read(set []uint64) error {
 		d.prev = val
 		set[i] = val
 	}
+
+	if d.br.ReadBits(8) != 0xaa {
+		return errors.New("Incorrect endmarker")
+	}
+
 	return d.br.Err()
 }
 
@@ -144,9 +196,15 @@ func NewDecompressor(r io.Reader) (*Decompressor, error) {
 	d := &Decompressor{br: br}
 
 	// Read size of set
-	d.remaining = br.ReadUvarint()
+	d.size = br.ReadUvarint()
 	if err := br.Err(); err != nil {
 		return nil, err
+	}
+
+	d.remaining = d.size
+
+	if d.size <= 1 {
+		return d, nil
 	}
 
 	// Read Huffman code

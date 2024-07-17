@@ -45,6 +45,11 @@ func (r *bitReader) Err() error {
 	return r.err
 }
 
+// Returns offset in current byte
+func (w *bitWriter) BitOffset() byte {
+	return byte(w.offset)
+}
+
 func (w *bitWriter) Close() error {
 	if w.err != nil {
 		return w.err
@@ -132,6 +137,30 @@ func (r *bitReader) ReadBit() byte {
 	return ret
 }
 
+// Return the next byte that will be read.
+func (r *bitReader) PeekByte() byte {
+	for 8 > r.size {
+		n, err := r.r.Read(r.scratch[:4])
+		if n == 0 {
+			r.err = err
+			panic(err)
+			return 0
+		}
+
+		// An io.Reader is allowed to use whole of buf as scratch space, so we
+		// need to explicitly set to zero.
+		for i := n; i < 4; i++ {
+			r.scratch[i] = 0
+		}
+
+		r.buf |= uint64(binary.LittleEndian.Uint32(r.scratch[:])) << r.size
+		r.size += byte(8 * n)
+	}
+
+	return byte(r.buf)
+}
+
+// Read l bits from r. Assumes l ≤ 64.
 func (r *bitReader) ReadBits(l byte) uint64 {
 	read := min(l, r.size)
 
@@ -146,6 +175,25 @@ func (r *bitReader) ReadBits(l byte) uint64 {
 
 	ret |= r.readBits(l-read) << read
 	return ret
+}
+
+// Read l bits from r, but do not return them.
+func (r *bitReader) SkipBits(l byte) {
+	read := min(l, r.size)
+
+	if read != r.size {
+		r.size -= l
+		r.buf >>= l
+		return
+	}
+
+	if !r.fill() {
+		return
+	}
+
+	rest := l - read
+	r.size -= rest
+	r.buf >>= rest
 }
 
 func (w *bitWriter) WriteUvarint(x uint64) {

@@ -8,11 +8,20 @@ import (
 	"slices"
 )
 
-// Representation of Huffman tree used during decompression
-//
-// Root is at index 0. htLut[i][0] contains the index of the left child of
-// the ith node if it's an internal node, and 128 | value if it's a leaf.
-type htLut [][2]byte
+// Prefix table used to represent Huffman tree during decompression:
+// eight layers are combined into one for fast decompression.
+type htLut []htLutEntry
+
+type htLutEntry struct {
+	value byte // If a leaf, the value: bitlength of the delta (minus one)
+
+	// If a leaf, the number of bits to skip in the last byte. Zero indicates
+	// this is a node.
+	skip byte
+
+	// If a node, offset into the table to find children.
+	next int
+}
 
 // Node in a Huffman tree when constructed from frequences
 type htNode struct {
@@ -25,8 +34,22 @@ type htNode struct {
 type htCode []htCodeEntry
 
 type htCodeEntry struct {
-	code   byte
+	code   uint64
 	length byte
+}
+
+func (h htLut) Print() {
+	for i := 0; i < len(h); i += 256 {
+		fmt.Printf("offset %d:", i)
+
+		for code := 0; code < 256; code++ {
+			for j := 0; j < int(8); j++ {
+				fmt.Printf("%d", (code>>j)&1)
+			}
+
+			fmt.Printf(" value=%d skip=%d next=%d\n", h[i+code].value, h[i+code].skip, h[i+code].next)
+		}
+	}
 }
 
 func (h htCode) Print() {
@@ -194,23 +217,20 @@ func unpackHuffmanTree(br *bitReader) (htLut, error) {
 
 	codebook := canonicalHuffmanCode(codeLengths)
 
-	tree := [][2]byte{{0, 0}}
+	// Build the binary tree before building the prefix table
+	root := &htNode{}
 
 	for bn, entry := range codebook {
 		code := entry.code
 
 		// Walk down the existing tree
-		node := byte(0)
+		node := root
 		d := 0
 		for {
-			next := tree[node][code&1]
+			next := node.children[code&1]
 
-			if next == 0 {
+			if next == nil {
 				break
-			}
-
-			if next&128 != 0 {
-				panic("shouldn't happen")
 			}
 
 			d++
@@ -219,29 +239,67 @@ func unpackHuffmanTree(br *bitReader) (htLut, error) {
 		}
 
 		// Now create the new nodes
-		for j := d; j < int(entry.length)-1; j++ {
-			newNode := byte(len(tree))
-			tree = append(tree, [2]byte{0, 0})
-			tree[node][code&1] = newNode
-			node = newNode
+		for j := d; j < int(entry.length); j++ {
+			node.children[code&1] = &htNode{}
+			node = node.children[code&1]
 			code >>= 1
 		}
 
-		if tree[node][code&1] != 0 {
-			panic("shouldn't happen")
-		}
-
-		tree[node][code&1] = 128 | byte(bn)
+		node.value = byte(bn)
 	}
 
-	return tree, nil
+	// Build the prefix table
+	lut := make(htLut, 256)
+
+	type todoEntry struct {
+		node   *htNode
+		offset int // in htLut
+	}
+
+	todo := []todoEntry{{root, 0}}
+
+	for len(todo) > 0 {
+		cur := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+
+		for code := 0; code < 256; code++ {
+			node := cur.node
+			skip := 0
+			for ; skip < 8; skip++ {
+				next := node.children[(code>>skip)&1]
+				if next == nil {
+					break
+				}
+				node = next
+			}
+
+			if node.children[0] == nil {
+				lut[cur.offset+code].skip = byte(skip)
+				lut[cur.offset+code].value = node.value
+				continue
+			}
+
+			lut[cur.offset+code].skip = 0
+			lut[cur.offset+code].next = len(lut)
+			todo = append(todo, todoEntry{
+				node:   node,
+				offset: len(lut),
+			})
+
+			for i := 0; i < 256; i++ {
+				lut = append(lut, htLutEntry{})
+			}
+		}
+	}
+
+	return lut, nil
 }
 
 func canonicalHuffmanCode(codeLengths []byte) htCode {
 	type valueLength struct {
 		value  byte
 		length byte
-		code   byte
+		code   uint64
 	}
 
 	vls := make([]valueLength, len(codeLengths))
@@ -258,7 +316,7 @@ func canonicalHuffmanCode(codeLengths []byte) htCode {
 	})
 
 	prevLength := byte(0)
-	code := byte(0)
+	code := uint64(0)
 	ret := make(htCode, len(codeLengths))
 	for i := 0; i < len(vls); i++ {
 		l := vls[i].length
@@ -268,7 +326,7 @@ func canonicalHuffmanCode(codeLengths []byte) htCode {
 
 		vls[i].code = code
 		ret[vls[i].value] = htCodeEntry{
-			code:   bits.Reverse8(code) >> (8 - l),
+			code:   bits.Reverse64(code) >> (64 - l),
 			length: l,
 		}
 		prevLength = l

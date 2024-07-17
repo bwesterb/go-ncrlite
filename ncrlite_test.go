@@ -62,6 +62,61 @@ func sample(N, k int) []uint64 {
 	return ret
 }
 
+func TestEmpty(t *testing.T) {
+	buf := new(bytes.Buffer)
+	ret := []uint64{}
+	Compress(buf, ret)
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
+}
+
+func TestMaxUint64(t *testing.T) {
+	buf := new(bytes.Buffer)
+	ret := []uint64{0xffffffffffffffff}
+	Compress(buf, ret)
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
+}
+
+func TestLargeUnbalancedCode(t *testing.T) {
+	buf := new(bytes.Buffer)
+	ret := []uint64{0xfffffffffffffffe, 0xfffffffffffffffd}
+	Compress(buf, ret)
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
+}
+
+func TestLargeBalancedCode(t *testing.T) {
+	buf := new(bytes.Buffer)
+	ret := []uint64{}
+	for i := 0; i < 64; i++ {
+		ret = append(ret, uint64(1)<<i)
+	}
+	Compress(buf, ret)
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
+}
+
 func TestWebPKI(t *testing.T) {
 	N := 735000000
 	k := 13000000
