@@ -143,7 +143,6 @@ func (r *bitReader) PeekByte() byte {
 		n, err := r.r.Read(r.scratch[:4])
 		if n == 0 {
 			r.err = err
-			panic(err)
 			return 0
 		}
 
