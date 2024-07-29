@@ -120,6 +120,42 @@ func (d *Decompressor) Remaining() uint64 {
 
 var ErrNoMore = errors.New("Reading beyond end of set")
 
+// Do the actual reading after having accounted for all error conditions
+// and corner cases.
+func (d *Decompressor) read(set []uint64) {
+	for i := 0; i < len(set); i++ {
+		// Read codeword for length
+		node := 0
+		var entry htLutEntry
+
+		for {
+			code := d.br.PeekByte()
+			entry = d.tree[node+int(code)]
+
+			if entry.skip != 0 {
+				break
+			}
+
+			d.br.SkipBits(8)
+			node = entry.next
+		}
+
+		d.br.SkipBits(entry.skip)
+
+		delta := d.br.ReadBits(entry.value) | (1 << entry.value)
+
+		val := d.prev + delta
+
+		if !d.started {
+			val-- // we shifted the first value so it can't be zero as delta
+			d.started = true
+		}
+
+		d.prev = val
+		set[i] = val
+	}
+}
+
 // Fill set with decompressed uint64s.
 func (d *Decompressor) Read(set []uint64) error {
 	if len(set) == 0 {
@@ -153,36 +189,20 @@ func (d *Decompressor) Read(set []uint64) error {
 		return ErrNoMore
 	}
 
-	for i := 0; i < len(set); i++ {
-		// Read codeword for length
-		node := 0
-		var entry htLutEntry
+	if d.tree == nil {
+		for i := 0; i < len(set); i++ {
+			val := d.prev + 1
 
-		for {
-			code := d.br.PeekByte()
-			entry = d.tree[node+int(code)]
-
-			if entry.skip != 0 {
-				break
+			if !d.started {
+				val-- // we shifted the first value so it can't be zero as delta
+				d.started = true
 			}
 
-			d.br.SkipBits(8)
-			node = entry.next
+			d.prev = val
+			set[i] = val
 		}
-
-		d.br.SkipBits(entry.skip)
-
-		delta := d.br.ReadBits(entry.value) | (1 << entry.value)
-
-		val := d.prev + delta
-
-		if !d.started {
-			val-- // we shifted the first value so it can't be zero as delta
-			d.started = true
-		}
-
-		d.prev = val
-		set[i] = val
+	} else {
+		d.read(set)
 	}
 
 	d.remaining -= uint64(len(set))

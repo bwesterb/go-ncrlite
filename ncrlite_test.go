@@ -136,3 +136,18 @@ func TestWebPKI(t *testing.T) {
 		t.Fatalf("%v %v", ret, ret2)
 	}
 }
+
+func TestJustOneBitlength(t *testing.T) {
+	buf := new(bytes.Buffer)
+
+	ret := []uint64{0, 1, 2, 3, 4, 5}
+
+	Compress(buf, ret)
+	ret2, err := Decompress(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ret, ret2) {
+		t.Fatalf("%v %v", ret, ret2)
+	}
+}

@@ -98,7 +98,16 @@ func unpackCodeLengths(br *bitReader, l io.Writer) ([]byte, error) {
 	if l != nil {
 		fmt.Fprintf(l, "max bitlength        %d\n", n-1)
 		fmt.Fprintf(l, "codelength h[0]      %d\n", h[0])
+
+		defer func() {
+			fmt.Fprintf(l, "dictionary size      %db\n", size)
+		}()
 	}
+
+	if n == 1 {
+		return h, br.Err()
+	}
+
 	change := int8(0)
 	i := 1
 	waitingFor := 0
@@ -131,10 +140,6 @@ func unpackCodeLengths(br *bitReader, l io.Writer) ([]byte, error) {
 		if waitingFor > int(n) {
 			return nil, errors.New("invalid codelength in Huffman table")
 		}
-	}
-
-	if l != nil {
-		fmt.Fprintf(l, "dictionary size      %db\n", size)
 	}
 
 	return h, br.Err()
@@ -233,9 +238,18 @@ func unpackHuffmanTree(br *bitReader, l io.Writer) (htLut, error) {
 		return nil, err
 	}
 
+	// Special case: if there
+	if len(codeLengths) == 1 {
+		if l != nil {
+			fmt.Fprintf(l, "\nTrivial codebook: only zero bitlength deltas\n\n")
+		}
+		return nil, nil
+	}
+
 	codebook := canonicalHuffmanCode(codeLengths)
 
 	if l != nil {
+		fmt.Fprintf(l, "\nCodebook bitlengths:\n")
 		codebook.Print(l)
 	}
 
