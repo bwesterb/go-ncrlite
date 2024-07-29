@@ -28,6 +28,7 @@ type htNode struct {
 	value    byte // If a leaf, the value: bitlength of the delta (minus one)
 	count    int  // Cumulative count
 	children [2]*htNode
+	depth    int
 }
 
 // Codebook for Huffman code
@@ -132,6 +133,9 @@ type htHeap []*htNode
 
 func (h htHeap) Len() int { return len(h) }
 func (h htHeap) Less(i, j int) bool {
+	if h[i].count == h[j].count {
+		return h[i].depth < h[j].depth
+	}
 	return h[i].count < h[j].count
 }
 
@@ -159,6 +163,7 @@ func buildHuffmanCode(freq []int) htCode {
 		h[i] = &htNode{
 			value: byte(i),
 			count: freq[i],
+			depth: 0,
 		}
 	}
 
@@ -173,6 +178,7 @@ func buildHuffmanCode(freq []int) htCode {
 		heap.Push(&h, &htNode{
 			count:    n1.count + n2.count,
 			children: [2]*htNode{n1, n2},
+			depth:    max(n1.depth, n2.depth) + 1,
 		})
 	}
 
