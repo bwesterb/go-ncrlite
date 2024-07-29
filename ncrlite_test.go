@@ -18,6 +18,7 @@ func BenchmarkDecompress(b *testing.B) {
 	Compress(buf, ret)
 	xs := buf.Bytes()
 
+    b.SetBytes(int64(k*8))
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -37,6 +38,7 @@ func BenchmarkCompress(b *testing.B) {
 
 	ret := sample(N, k)
 
+    b.SetBytes(int64(k*8))
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
