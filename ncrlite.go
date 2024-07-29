@@ -147,11 +147,11 @@ func (d *Decompressor) Read(set []uint64) error {
 		return nil
 	}
 
-	for i := 0; i < len(set); i++ {
-		if d.remaining == 0 {
-			return ErrNoMore
-		}
+	if d.remaining < uint64(len(set)) {
+		return ErrNoMore
+	}
 
+	for i := 0; i < len(set); i++ {
 		// Read codeword for length
 		node := 0
 		var entry htLutEntry
@@ -183,8 +183,12 @@ func (d *Decompressor) Read(set []uint64) error {
 		set[i] = val
 	}
 
-	if d.br.ReadBits(8) != 0xaa {
-		return errors.New("Incorrect endmarker")
+	d.remaining -= uint64(len(set))
+
+	if d.remaining == 0 {
+		if d.br.ReadBits(8) != 0xaa {
+			return errors.New("Incorrect endmarker")
+		}
 	}
 
 	return d.br.Err()
