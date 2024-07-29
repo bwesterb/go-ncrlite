@@ -251,6 +251,7 @@ func unpackHuffmanTree(br *bitReader, l io.Writer) (htLut, error) {
 	if l != nil {
 		fmt.Fprintf(l, "\nCodebook bitlengths:\n")
 		codebook.Print(l)
+		fmt.Fprintf(l, "\n")
 	}
 
 	// Build the binary tree before building the prefix table

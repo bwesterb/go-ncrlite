@@ -8,12 +8,13 @@ import (
 )
 
 type bitReader struct {
-	r    *bufio.Reader
-	size byte
-	buf  uint64
-	err  error
+	r     *bufio.Reader
+	buf   uint64
+	err   error
+	total int
 
 	scratch [8]byte // to prevent allocations
+	size    byte
 }
 
 type bitWriter struct {
@@ -112,6 +113,8 @@ func (r *bitReader) fill() bool {
 		return false
 	}
 
+	r.total += n
+
 	// An io.Reader is allowed to use whole of buf as scratch space, so we
 	// need to explicitly set to zero.
 	for i := n; i < 8; i++ {
@@ -145,6 +148,8 @@ func (r *bitReader) PeekByte() byte {
 			r.err = err
 			return 0
 		}
+
+		r.total += n
 
 		// An io.Reader is allowed to use whole of buf as scratch space, so we
 		// need to explicitly set to zero.

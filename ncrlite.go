@@ -2,7 +2,6 @@ package ncrlite
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/bits"
 	"slices"
@@ -120,6 +119,11 @@ func (d *Decompressor) Remaining() uint64 {
 
 var ErrNoMore = errors.New("Reading beyond end of set")
 
+// Return the total number of bytes read so far.
+func (d *Decompressor) BytesRead() int {
+	return d.br.total
+}
+
 // Do the actual reading after having accounted for all error conditions
 // and corner cases.
 func (d *Decompressor) read(set []uint64) {
@@ -232,10 +236,6 @@ func NewDecompressorWithLogging(r io.Reader, l io.Writer) (*Decompressor, error)
 	d.size = br.ReadUvarint()
 	if err := br.Err(); err != nil {
 		return nil, err
-	}
-
-	if l != nil {
-		fmt.Fprintf(l, "size                 %d\n", d.size)
 	}
 
 	d.remaining = d.size

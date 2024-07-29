@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +33,17 @@ var (
 	outPath string
 	outFile *os.File
 )
+
+// Approximates lg n! using Stirling's approximation
+func lgfac(n uint64) float64 {
+	fn := float64(n)
+	return math.Log2(2*math.Pi*fn)/2 + fn*math.Log2(fn) - fn*math.Log2(math.E)
+}
+
+// Approximates lg n choose k.
+func lgncr(n, k uint64) float64 {
+	return lgfac(n) - lgfac(k) - lgfac(n-k)
+}
 
 const extension = ".ncrlite"
 
@@ -58,22 +70,48 @@ func doDecompress() int {
 		return 8
 	}
 
-	var xs [512]uint64
+	var (
+		xs     [512]uint64
+		toRead []uint64
+	)
+
+	// For statistics when in info mode
+	k := d.Remaining()
+
 	for d.Remaining() > 0 {
-		roRead := xs[:min(len(xs), int(d.Remaining()))]
-		err = d.Read(roRead)
+		toRead = xs[:min(len(xs), int(d.Remaining()))]
+		err = d.Read(toRead)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", inPath, err)
 			return 9
 		}
 
-		for _, x := range roRead {
+		for _, x := range toRead {
 			_, err = fmt.Fprintf(w, "%d\n", x)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", outPath, err)
 				return 10
 			}
 		}
+	}
+
+	if l != nil {
+		N := uint64(0)
+
+		if k != 0 {
+			N = toRead[len(toRead)-1] + 1
+		}
+
+		shannon := lgncr(N, k) / 8
+
+		fmt.Fprintf(l, "Maximum value    (N)  %d\n", N)
+		fmt.Fprintf(l, "Number of values (k)  %d\n", k)
+		fmt.Fprintf(l, "Theoretical best avg  %.1fB\n", shannon)
+		fmt.Fprintf(
+			l,
+			"Overhead              %.1f%%\n",
+			100*(float64(d.BytesRead())/float64(shannon)-1.0),
+		)
 	}
 
 	err = w.Flush()
