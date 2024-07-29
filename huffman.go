@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"io"
 	"math/bits"
 	"slices"
 )
@@ -39,29 +40,29 @@ type htCodeEntry struct {
 	length byte
 }
 
-func (h htLut) Print() {
+func (h htLut) Print(w io.Writer) {
 	for i := 0; i < len(h); i += 256 {
-		fmt.Printf("offset %d:", i)
+		fmt.Fprintf(w, "offset %d:", i)
 
 		for code := 0; code < 256; code++ {
 			for j := 0; j < int(8); j++ {
-				fmt.Printf("%d", (code>>j)&1)
+				fmt.Fprintf(w, "%d", (code>>j)&1)
 			}
 
-			fmt.Printf(" value=%d skip=%d next=%d\n", h[i+code].value, h[i+code].skip, h[i+code].next)
+			fmt.Fprintf(w, " value=%d skip=%d next=%d\n", h[i+code].value, h[i+code].skip, h[i+code].next)
 		}
 	}
 }
 
-func (h htCode) Print() {
+func (h htCode) Print(w io.Writer) {
 	for i, entry := range h {
-		fmt.Printf("%2d ", i)
+		fmt.Fprintf(w, "%2d ", i)
 		code := entry.code
 		for j := 0; j < int(entry.length); j++ {
-			fmt.Printf("%d", code&1)
+			fmt.Fprintf(w, "%d", code&1)
 			code >>= 1
 		}
-		fmt.Printf("\n")
+		fmt.Fprintf(w, "\n")
 	}
 }
 
@@ -89,15 +90,21 @@ func (h htCode) Pack(bw *bitWriter) {
 	}
 }
 
-func unpackCodeLengths(br *bitReader) ([]byte, error) {
+func unpackCodeLengths(br *bitReader, l io.Writer) ([]byte, error) {
+	size := 12
 	n := br.ReadBits(6) + 1
 	h := make([]byte, n)
 	h[0] = byte(br.ReadBits(6))
+	if l != nil {
+		fmt.Fprintf(l, "max bitlength        %d\n", n-1)
+		fmt.Fprintf(l, "codelength h[0]      %d\n", h[0])
+	}
 	change := int8(0)
 	i := 1
 	waitingFor := 0
 
 	for {
+		size++
 		next := br.ReadBit()
 		if next == 1 {
 			h[i] = byte(int8(h[i-1]) + change)
@@ -113,6 +120,7 @@ func unpackCodeLengths(br *bitReader) ([]byte, error) {
 		}
 
 		waitingFor++
+		size++
 		up := br.ReadBit()
 		if up == 1 {
 			change++
@@ -123,6 +131,10 @@ func unpackCodeLengths(br *bitReader) ([]byte, error) {
 		if waitingFor > int(n) {
 			return nil, errors.New("invalid codelength in Huffman table")
 		}
+	}
+
+	if l != nil {
+		fmt.Fprintf(l, "dictionary size      %db\n", size)
 	}
 
 	return h, br.Err()
@@ -215,13 +227,17 @@ func buildHuffmanCode(freq []int) htCode {
 	return codebook
 }
 
-func unpackHuffmanTree(br *bitReader) (htLut, error) {
-	codeLengths, err := unpackCodeLengths(br)
+func unpackHuffmanTree(br *bitReader, l io.Writer) (htLut, error) {
+	codeLengths, err := unpackCodeLengths(br, l)
 	if err != nil {
 		return nil, err
 	}
 
 	codebook := canonicalHuffmanCode(codeLengths)
+
+	if l != nil {
+		codebook.Print(l)
+	}
 
 	// Build the binary tree before building the prefix table
 	root := &htNode{}

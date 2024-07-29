@@ -2,6 +2,7 @@ package ncrlite
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math/bits"
 	"slices"
@@ -105,6 +106,7 @@ type Decompressor struct {
 	br        *bitReader
 	size      uint64
 	remaining uint64
+	l         io.Writer
 
 	tree    htLut  // Huffman tree
 	prev    uint64 // last value emitted
@@ -194,8 +196,15 @@ func (d *Decompressor) Read(set []uint64) error {
 	return d.br.Err()
 }
 
-// Decompressor a set of uint64s from r incrementally.
+// Returns a new Decompressor that reads a set of uint64s from r incrementally.
 func NewDecompressor(r io.Reader) (*Decompressor, error) {
+	return NewDecompressorWithLogging(r, nil)
+}
+
+// Returns a new Decompressor that reads a set of uint64s from r incrementally.
+//
+// Logs information about the compressed format to l.
+func NewDecompressorWithLogging(r io.Reader, l io.Writer) (*Decompressor, error) {
 	br := newBitReader(r)
 	d := &Decompressor{br: br}
 
@@ -203,6 +212,10 @@ func NewDecompressor(r io.Reader) (*Decompressor, error) {
 	d.size = br.ReadUvarint()
 	if err := br.Err(); err != nil {
 		return nil, err
+	}
+
+	if l != nil {
+		fmt.Fprintf(l, "size                 %d\n", d.size)
 	}
 
 	d.remaining = d.size
@@ -213,7 +226,7 @@ func NewDecompressor(r io.Reader) (*Decompressor, error) {
 
 	// Read Huffman code
 	var err error
-	d.tree, err = unpackHuffmanTree(br)
+	d.tree, err = unpackHuffmanTree(br, l)
 	if err != nil {
 		return nil, err
 	}

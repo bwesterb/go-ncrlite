@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ var (
 	// Flags
 
 	decompress = flag.Bool("decompress", false, "specify to decompress")
+	info       = flag.Bool("info", false, "specify to print info on compressed file")
 	keep       = flag.Bool("keep", false, "keep (don't delete) input file")
 	toStdout   = flag.Bool("stdout", false, "write to stdout; implies -k")
 	force      = flag.Bool("force", false, "overwrite output")
@@ -34,9 +36,23 @@ var (
 const extension = ".ncrlite"
 
 func doDecompress() int {
-	w := bufio.NewWriter(outFile)
+	var w *bufio.Writer
+
+	if outFile == nil {
+		w = bufio.NewWriter(io.Discard)
+	} else {
+		w = bufio.NewWriter(outFile)
+	}
+
 	r := bufio.NewReader(inFile)
-	d, err := ncrlite.NewDecompressor(r)
+	var l io.Writer
+
+	if *info {
+		l = os.Stdout
+	}
+
+	d, err := ncrlite.NewDecompressorWithLogging(r, l)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", inPath, err)
 		return 8
@@ -187,19 +203,21 @@ func do() int {
 					outPath,
 				)
 			}
-		} else {
+		} else if !*info {
 			outPath = inPath + extension
 		}
 	}
 
-	if outPath == "-" {
+	if *info && !*decompress {
+		outFile = nil
+	} else if outPath == "-" {
 		outFile = os.Stdout
 
-		if term.IsTerminal(int(os.Stdout.Fd())) && !*decompress {
+		if term.IsTerminal(int(os.Stdout.Fd())) && !*decompress && !*info {
 			fmt.Fprintf(os.Stderr, "ncrlite: I'm not writing compressed data to stdout\n")
 			return 13
 		}
-	} else {
+	} else if !*info {
 		if _, err := os.Stat(outPath); !*force && err == nil {
 			fmt.Fprintf(os.Stderr, "%s: already exists\n", outPath)
 			return 11
@@ -214,7 +232,7 @@ func do() int {
 		closeOutput = true
 	}
 
-	if *decompress {
+	if *decompress || *info {
 		code = doDecompress()
 	} else {
 		code = doCompress()
@@ -224,7 +242,7 @@ func do() int {
 		closeInput = false
 		inFile.Close()
 
-		if !*keep && !*toStdout && code == 0 {
+		if !*keep && !*toStdout && code == 0 && !*info {
 			err = os.Remove(inPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s: unlink: %v\n", inPath, err)
@@ -241,6 +259,7 @@ func main() {
 	getopt.Alias("k", "keep")
 	getopt.Alias("c", "stdout")
 	getopt.Alias("f", "force")
+	getopt.Alias("i", "info")
 
 	// Work around https://github.com/rsc/getopt/issues/3
 	err := getopt.CommandLine.Parse(os.Args[1:])
