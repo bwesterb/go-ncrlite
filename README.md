@@ -1,13 +1,124 @@
 go-ncrlite
 ==========
 
-Package to compress a set of positive integers.
+*ncrlite* is a simple and fast compression format specifically designed to compress an unordered
+set of positive integers (below 2⁶⁴).
+This repository contains a [Go package](https://pkg.go.dev/github.com/bwesterb/go-ncrlite#Compress)
+that implements it and a commandline tool.
 
-**WARNING** The file format is not final yet.
+**Warning.** The file format is not yet final.
 
+Performance
+-----------
+
+*ncrlite* achieves smaller compressed sizes than general-purpose compressors.
+
+| dataset | description | CSV | ncrlite | gzip -9 | xz -9 |
+| --- | --- | --- | --- | --- | --- |
+| [le.csv](https://westerbaan.name/~bas/ncrlite/le.csv.ncrlite) | Sequence numbers of Let's Encrypt certificates revoked on July 18th, 2024 | 4.8MB | 706kB | 1.7MB | 900kB |
+
+Commandline tool
+----------------
+
+### Installation
+
+Install [Go](https://go.dev/doc/install) and run
+
+```
+$ go install github.com/bwesterb/go-ncrlite/cmd/ncrlite@latest
+```
+
+Now you can use `ncrlite`.
+
+### Basic operation
+
+`ncrlite` takes as input a textfile with a positive number on each line.
+
+```
+$ cat dunbar
+5
+15
+35
+150
+500
+1500
+```
+
+To compress simply run:
+
+```
+$ ncrlite dunbar
+```
+
+This will create `dunbar.ncrlite` and remove `dunbar`.
+
+The input file does not have to be sorted (numerically). If it is not, `ncrlite` will sort the input first, which is slower.
+
+To decompress, run:
+
+```
+$ ncrlite -d dunbar.ncrlite
+```
+
+This will create `dunbar` and remove `dunbar.ncrlite`. The output file is always sorted.
+
+### Other formats
+
+At the moment, the `ncrlite` commandline tool only supports the simple text format.
+[Reach out](https://github.com/bwesterb/go-ncrlite/issues/1) if another is useful.
+
+### Other flags
+
+`ncrlite` supports several familiar flags.
+
+```
+  -f, --force
+    	overwrite output
+  -k, --keep
+    	keep (don't delete) input file
+  -c, --stdout
+    	write to stdout; implies -k
+```
+
+Without specifying a filename (or using `-`),
+`ncrlite` will read from `stdin` and write to `stdout`.
+
+### Inspect compressed file
+
+With `-i` we can inspect a compressed file:
+
+```
+$ ncrlite -i le.csv.ncrlite 
+max bitlength        14
+codelength h[0]      9
+dictionary size      56b
+
+Codebook bitlengths:
+ 0 111111110
+ 1 11111110
+ 2 1111100
+ 3 1111101
+ 4 11110
+ 5 1100
+ 6 1101
+ 7 100
+ 8 00
+ 9 01
+10 101
+11 1110
+12 1111110
+13 1111111110
+14 1111111111
+
+Maximum value    (N)  382584265
+Number of values (k)  512652
+Theoretical best avg  703953.8B
+Overhead              0.4%
+```
 
 Format
 ------
+
 The file starts with the **size** of the set as an unsigned varint.
 
 There are two special cases.
