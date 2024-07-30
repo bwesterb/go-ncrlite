@@ -120,8 +120,10 @@ Overhead              0.4%
 
 Format
 ------
+In short: we store the deltas (differences) which are each prefixed by a Huffman
+code for their bitlength. The Huffman code is stored using bzip2's method.
 
-The file starts with the **size** of the set as an unsigned varint.
+Now, in detail. The file starts with the **size** of the set as an unsigned varint.
 
 There are two special cases.
 
