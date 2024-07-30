@@ -16,6 +16,7 @@ Performance
 | dataset | description | CSV | ncrlite | gzip -9 | xz -9 |
 | --- | --- | --- | --- | --- | --- |
 | [le.csv](https://westerbaan.name/~bas/ncrlite/le.csv.ncrlite) | Sequence numbers of Let's Encrypt certificates revoked on July 18th, 2024 | 4.8MB | 706kB | 1.7MB | 900kB |
+| [primes.csv](https://westerbaan.name/~bas/ncrlite/primes.csv.ncrlite) | First million prime numbers | 8.2MB | 674kB | 2.4MB | 941kB |
 
 Commandline tool
 ----------------
