@@ -17,7 +17,7 @@ Performance
 | --- | --- | --- | --- | --- | --- |
 | [le.csv](https://westerbaan.name/~bas/ncrlite/le.csv.ncrlite) | Sequence numbers of Let's Encrypt certificates revoked on July 18th, 2024 | 4.8MB | 706kB | 1.7MB | 900kB |
 | [primes.csv](https://westerbaan.name/~bas/ncrlite/primes.csv.ncrlite) | First million prime numbers | 8.2MB | 674kB | 2.4MB | 941kB |
-| [sigs.csv](https://westerbaan.name/~bas/ncrlite/sigs.csv.ncrlite) | List of signature algorithms supported by Chrome 126 | 44B | 16B | 58B | 96B |
+| [sigs.csv](https://westerbaan.name/~bas/ncrlite/sigs.csv.ncrlite) | List of the 9 signature algorithms supported by Chrome 126 | 44B | 16B | 58B | 96B |
 
 Commandline tool
 ----------------
