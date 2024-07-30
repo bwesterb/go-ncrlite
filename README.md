@@ -159,9 +159,10 @@ has a codeword of the same length as the previous codeword, we encode this
 with a single bit 1.
 
 Instead, if the codeword is one larger we encode this as first a single bit 0
-and then a single bit 1. Together: `0b10`. If it's two larger we repeat
-twice: `0b1010`. And so on. If the codeword is one smaller we use `0b00`, and
-repeat if the difference is larger.
+to say we're not done; then a single bit 1 to say the next is larger;
+and finally a 1 to say we're done. Together: `0b101`.
+If it's two larger we repeat twice: `0b10101`. And so on. If the codeword
+is one smaller we use `0b001`, and repeat `00` if the difference is larger.
 
 After having encoded the Huffman code for the bitlengths, we encode
 the deltas themselves. First we write the Huffman code for the bitlength.
