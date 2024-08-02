@@ -13,11 +13,32 @@ Performance
 
 *ncrlite* achieves smaller compressed sizes than general-purpose compressors.
 
-| dataset | description | CSV | ncrlite | gzip -9 | xz -9 |
+| Dataset | Description | CSV | ncrlite | `gzip -9` | `xz -9` |
 | --- | --- | --- | --- | --- | --- |
 | [le.csv](https://westerbaan.name/~bas/ncrlite/le.csv.ncrlite) | Sequence numbers of Let's Encrypt certificates revoked on July 18th, 2024 | 4.8MB | 706kB | 1.7MB | 900kB |
 | [primes.csv](https://westerbaan.name/~bas/ncrlite/primes.csv.ncrlite) | First million prime numbers | 8.2MB | 674kB | 2.4MB | 941kB |
 | [sigs.csv](https://westerbaan.name/~bas/ncrlite/sigs.csv.ncrlite) | List of the 9 signature algorithms supported by Chrome 126 | 44B | 16B | 58B | 96B |
+| [9900.csv](https://westerbaan.name/~bas/ncrlite/9900.csv.ncrlite) | Numbers {9900, 9901, ..., 9999, 10000} | 506B | 24B | 181B | 200B |
+
+Compared to more specialized compressors, *ncrlite* outperforms [Elias–Fano](https://github.com/bwesterb/go-ncrlite/issues/2).
+*nrclite* performs slightly worse than [Rice coding](https://en.wikipedia.org/wiki/Golomb_coding) on random sets,
+but is still close to the theoretical limit of *lg N choose k*. *ncrlite* does perform better than Rice coding on skewed sets like {9900, ..., 10000}.
+
+| Dataset | ncrlite | Rice | Elias–Fano | Limit for random sets |
+| --- | --- | --- | --- | --- |
+| le.csv | 706kB | 707kB | 770kB | 704kB |
+| primes.csv | 674kB | 669kB | 756kB | 668kB |
+| sigs.csv | 16B | 11B | 56B | 11B |
+| 9900.csv | 24B | 108B | TBD | 101B |
+
+### Theoretical limit for random sets
+
+There are *N choose k* subsets of *k* positive integers below *N*.
+Thus there is a hard limit: no compression method can encode *every*
+such set in less than *lg N choose k* bits.
+
+Of course a compression method can beat the limit for specific sets,
+but it will have to compensate by using more bits for others.
 
 Commandline tool
 ----------------
