@@ -26,10 +26,10 @@ but is still close to the theoretical limit of *lg N choose k*. *ncrlite* does p
 
 | Dataset | ncrlite | Rice | Elias–Fano | Limit for random sets |
 | --- | --- | --- | --- | --- |
-| le.csv | 706kB | 707kB | 770kB | 704kB |
-| primes.csv | 674kB | 669kB | 756kB | 668kB |
-| sigs.csv | 16B | 11B | 56B | 11B |
-| 9900.csv | 24B | 108B | TBD | 101B |
+| le.csv | 706kB | 707kB | 734kB | 704kB |
+| primes.csv | 674kB | 669kB | 742kB | 668kB |
+| sigs.csv | 16B | 11B | 11B | 11B |
+| 9900.csv | 24B | 108B | 108B | 101B |
 
 ### Theoretical limit for random sets
 
