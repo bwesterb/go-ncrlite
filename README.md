@@ -40,6 +40,15 @@ such set in less than *lg N choose k* bits.
 Of course a compression method can beat the limit for specific sets,
 but it will have to compensate by using more bits for others.
 
+#### Origin of the name
+
+The name *ncrlite* is a pun on this theoretical limit
+and [CRLite](https://blog.mozilla.org/security/2020/01/09/crlite-part-1-all-web-pki-revocations-compressed/).
+Namely *N choose k* is sometimes written as *N nCr k*, including
+on my old [TI 83+](https://en.wikipedia.org/wiki/TI-83_series),
+and I studied this problem initially in the context of compressing
+certificate transparency index numbers of revoked certificates.
+
 Commandline tool
 ----------------
 
